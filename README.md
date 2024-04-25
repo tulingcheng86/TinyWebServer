@@ -252,8 +252,108 @@ Star History
 ---------
 [![Star History Chart](https://api.star-history.com/svg?repos=qinguoyi/TinyWebServer&type=Date)](https://star-history.com/#qinguoyi/TinyWebServer&Date)
 
+
+
+# 我自己的安装运行
+
+[参考](https://huaweicloud.csdn.net/63355e96d3efff3090b5466f.html?spm=1001.2101.3001.6650.3&utm_medium=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7Eactivity-3-121400284-blog-113777258.pc_relevant_3mothn_strategy_recovery&depth_1-utm_source=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7Eactivity-3-121400284-blog-113777258.pc_relevant_3mothn_strategy_recovery&utm_relevant_index=6)
+
+## 部署安装
+
+```plain
+git clone https://github.com/qinguoyi/TinyWebServer.git
+
+sudo apt-get install mysql-server
+sudo mysql_secure_installation
+```
+
+配置项如下
+
+```shell
+#1
+VALIDATE PASSWORD PLUGIN can be used to test passwords...
+Press y|Y for Yes, any other key for No: N (我的选项)
+#2
+Please set the password for root here...
+New password: (输入密码)
+Re-enter new password: (重复输入)
+#3
+By default, a MySQL installation has an anonymous user,
+allowing anyone to log into MySQL without having to have
+a user account created for them...
+Remove anonymous users? (Press y|Y for Yes, any other key for No) : N (我的选项)
+#4
+Normally, root should only be allowed to connect from
+'localhost'. This ensures that someone cannot guess at
+the root password from the network...
+Disallow root login remotely? (Press y|Y for Yes, any other key for No) : Y (我的选项)
+#5
+By default, MySQL comes with a database named 'test' that
+anyone can access...
+Remove test database and access to it? (Press y|Y for Yes, any other key for No) : N (我的选项)
+#6
+Reloading the privilege tables will ensure that all changes
+made so far will take effect immediately.
+Reload privilege tables now? (Press y|Y for Yes, any other key for No) : Y (我的选项)
+```
+
+
+
+检查mysql状态
+
+```shell
+systemctl status mysql.service
+```
+
+进入mysql
+
+```shell
+sudo mysql -uroot -p
+```
+
+
+
+```shell
+// 建立yourdb库
+create database yourdb;
+
+// 创建user表
+USE yourdb;
+CREATE TABLE user(
+    username char(50) NULL,
+    passwd char(50) NULL
+)ENGINE=InnoDB;
+
+// 添加数据
+INSERT INTO user(username, passwd) VALUES('name', 'passwd');
+```
+
+修改main.cpp中的数据库初始化信息
+
+```shell
+   //数据库登录名,密码,库名
+    string user = "root";
+    string passwd = "sbim123";
+    string databasename = "yourdb";
+```
+
+
+
+```shell
+./build.sh
+
+./server 9006
+
+//查看9006端口状态
+sudo netstat -tulnp | grep :9006
+
+//浏览器打开
+localhost:9006
+```
+
 CPP11实现
 ------------
+
 更简洁，更优雅的CPP11实现：[Webserver](https://github.com/markparticle/WebServer)
 
 
