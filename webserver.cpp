@@ -101,7 +101,8 @@ void WebServer::thread_pool()
 }
 
 void WebServer::eventListen()
-{
+{   
+    //民工三连（创建、绑定、监听）
     //网络编程基础步骤
     m_listenfd = socket(PF_INET, SOCK_STREAM, 0);
     assert(m_listenfd >= 0);
@@ -117,7 +118,8 @@ void WebServer::eventListen()
         struct linger tmp = {1, 1};
         setsockopt(m_listenfd, SOL_SOCKET, SO_LINGER, &tmp, sizeof(tmp));
     }
-    //民工三连
+
+    //地址绑定
     int ret = 0;
     struct sockaddr_in address;
     bzero(&address, sizeof(address));
@@ -132,25 +134,35 @@ void WebServer::eventListen()
     ret = listen(m_listenfd, 5);
     assert(ret >= 0);
 
+    //初始化定时器
     utils.init(TIMESLOT);
 
+    //调用epoll的三连
     //epoll创建内核事件表
     epoll_event events[MAX_EVENT_NUMBER];
     m_epollfd = epoll_create(5);
     assert(m_epollfd != -1);
 
+    //将lfd上树
     utils.addfd(m_epollfd, m_listenfd, false, m_LISTENTrigmode);
     http_conn::m_epollfd = m_epollfd;
 
+    //创建管道套接字
     ret = socketpair(PF_UNIX, SOCK_STREAM, 0, m_pipefd);
     assert(ret != -1);
-    utils.setnonblocking(m_pipefd[1]);
+    //设置管道写端为非阻塞，为什么写端要非阻塞？
+    //send是将信息发送给套接字缓冲区，如果缓冲区满了，则会阻塞，
+    //这时候会进一步增加信号处理函数的执行时间，为此，将其修改为非阻塞。
+
+    utils.setnonblocking(m_pipefd[1]);//将管道的写端设置为非阻塞模式
+    //可能是封装了 epoll_ctl 调用，用于添加文件描述符到 epoll 的监控中。
     utils.addfd(m_epollfd, m_pipefd[0], false, 0);
 
     utils.addsig(SIGPIPE, SIG_IGN);
     utils.addsig(SIGALRM, utils.sig_handler, false);
     utils.addsig(SIGTERM, utils.sig_handler, false);
 
+    //每隔TIMESLOT时间触发SIGALRM信号
     alarm(TIMESLOT);
 
     //工具类,信号和描述符基础操作
@@ -198,9 +210,11 @@ void WebServer::deal_timer(util_timer *timer, int sockfd)
 }
 
 bool WebServer::dealclientdata()
-{
+{   
+
     struct sockaddr_in client_address;
     socklen_t client_addrlength = sizeof(client_address);
+    // LT 
     if (0 == m_LISTENTrigmode)
     {
         int connfd = accept(m_listenfd, (struct sockaddr *)&client_address, &client_addrlength);
@@ -209,17 +223,20 @@ bool WebServer::dealclientdata()
             LOG_ERROR("%s:errno is:%d", "accept error", errno);
             return false;
         }
+        //最大连接数检查
         if (http_conn::m_user_count >= MAX_FD)
         {
             utils.show_error(connfd, "Internal server busy");
             LOG_ERROR("%s", "Internal server busy");
             return false;
         }
+        //设置定时器,置连接超时管理，以避免僵尸连接占用资源。
         timer(connfd, client_address);
     }
 
     else
-    {
+    {   
+        // ET
         while (1)
         {
             int connfd = accept(m_listenfd, (struct sockaddr *)&client_address, &client_addrlength);
@@ -380,43 +397,48 @@ void WebServer::eventLoop()
     bool stop_server = false;
 
     while (!stop_server)
-    {
+    {   //监测发生事件的文件描述符
         int number = epoll_wait(m_epollfd, events, MAX_EVENT_NUMBER, -1);
         if (number < 0 && errno != EINTR)
         {
             LOG_ERROR("%s", "epoll failure");
             break;
         }
-
+        //轮询有事件产生的文件描述符
         for (int i = 0; i < number; i++)
         {
             int sockfd = events[i].data.fd;
 
-            //处理新到的客户连接
+            //1  处理新到的客户连接
             if (sockfd == m_listenfd)
             {
                 bool flag = dealclientdata();
                 if (false == flag)
                     continue;
             }
+            //2  异常事件处理
             else if (events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR))
             {
                 //服务器端关闭连接，移除对应的定时器
                 util_timer *timer = users_timer[sockfd].timer;
                 deal_timer(timer, sockfd);
             }
-            //处理信号
+            //3  处理信号
+            //管道读端对应文件描述符发生读事件
+            //因为统一了事件源，信号处理当成读事件来处理
+            //怎么统一？就是信号回调函数哪里不立即处理而是写到：pipe的写端
             else if ((sockfd == m_pipefd[0]) && (events[i].events & EPOLLIN))
             {
                 bool flag = dealwithsignal(timeout, stop_server);
                 if (false == flag)
                     LOG_ERROR("%s", "dealclientdata failure");
             }
-            //处理客户连接上接收到的数据
+            //4  处理客户连接上接收到的数据
             else if (events[i].events & EPOLLIN)
             {
                 dealwithread(sockfd);
             }
+            //5  数据写入,说明可以向客户端发送数据
             else if (events[i].events & EPOLLOUT)
             {
                 dealwithwrite(sockfd);
