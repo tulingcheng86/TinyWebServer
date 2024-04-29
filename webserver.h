@@ -24,21 +24,21 @@ class WebServer
 public:
     WebServer();
     ~WebServer();
-
+    //初始化服务器的配置。
     void init(int port , string user, string passWord, string databaseName,
               int log_write , int opt_linger, int trigmode, int sql_num,
               int thread_num, int close_log, int actor_model);
-
+    //初始化线程池。
     void thread_pool();
-    void sql_pool();
-    void log_write();
-    void trig_mode();
-    void eventListen();
-    void eventLoop();
+    void sql_pool();//初始化数据库连接池。
+    void log_write();//配置日志写入。
+    void trig_mode();//设置 epoll 的触发模式。
+    void eventListen();//设置并启动监听。
+    void eventLoop();//执行主事件循环，处理网络事件。
     void timer(int connfd, struct sockaddr_in client_address);
     void adjust_timer(util_timer *timer);
     void deal_timer(util_timer *timer, int sockfd);
-    bool dealclientdata();
+    bool dealclientdata();//处理客户端数据。
     bool dealwithsignal(bool& timeout, bool& stop_server);
     void dealwithread(int sockfd);
     void dealwithwrite(int sockfd);
@@ -49,7 +49,7 @@ public:
     char *m_root;
     int m_log_write;
     int m_close_log;
-    int m_actormodel;
+    int m_actormodel;//并发模型，比如 Reactor 或 Proactor。
 
     int m_pipefd[2];
     int m_epollfd;
@@ -64,7 +64,7 @@ public:
 
     //线程池相关
     threadpool<http_conn> *m_pool;
-    int m_thread_num;
+    int m_thread_num;//线程池中的线程数量。
 
     //epoll_event相关
     epoll_event events[MAX_EVENT_NUMBER];
